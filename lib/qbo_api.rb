@@ -42,6 +42,7 @@ class QboApi
     Faraday.new(url: url) do |faraday|
       faraday.headers['Content-Type'] = 'application/json;charset=UTF-8'
       faraday.headers['Accept'] = "application/json"
+      faraday.headers['Request-Id'] = uuid
       faraday.request :oauth, oauth_data 
       faraday.request :url_encoded
       faraday.use FaradayMiddleware::RaiseHttpException
