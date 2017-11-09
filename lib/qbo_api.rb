@@ -42,7 +42,6 @@ class QboApi
     Faraday.new(url: url) do |faraday|
       faraday.headers['Content-Type'] = 'application/json;charset=UTF-8'
       faraday.headers['Accept'] = "application/json"
-      faraday.headers['Request-Id'] = uuid
       faraday.request :oauth, oauth_data 
       faraday.request :url_encoded
       faraday.use FaradayMiddleware::RaiseHttpException
@@ -110,8 +109,9 @@ class QboApi
     end while (results ? results.size == max : false)
   end
 
-  def request(method, path:, entity: nil, payload: nil, params: nil)
+  def request(method, path:, entity: nil, payload: nil, params: nil, headers: nil)
     raw_response = connection.send(method) do |req|
+      req.headers['Request-Id'] = headers&.with_indifferent_access&.fetch("requestId", nil) || uuid
       path = finalize_path(path, method: method, params: params)
       case method
       when :get, :delete
