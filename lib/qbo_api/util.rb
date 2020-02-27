@@ -1,5 +1,10 @@
 class QboApi
   module Util
+    attr_writer :minor_version
+
+    def minor_version
+      @minor_version || QboApi.minor_version
+    end
 
     def esc(query)
       query.gsub("'", "\\\\'")
@@ -33,7 +38,7 @@ class QboApi
     end
 
     def add_minor_version_to(path)
-      if minor_version = QboApi.minor_version
+      if minor_version = self.minor_version
         add_params_to_path(path: path, params: { "minorversion" => minor_version })
       else
         path
@@ -47,21 +52,6 @@ class QboApi
         uri.query = URI.encode_www_form(new_query_ar)
       end
       uri.to_s
-    end
-
-    def join_or_start_where_clause!(select:)
-      if select.match(/where/i)
-        str = ' AND '
-      else
-        str = ' WHERE '
-      end
-      str
-    end
-
-    def build_all_query(entity, select: nil, inactive: false)
-      select ||= "SELECT * FROM #{singular(entity)}"
-      select += join_or_start_where_clause!(select: select) + 'Active IN ( true, false )' if inactive
-      select
     end
 
   end

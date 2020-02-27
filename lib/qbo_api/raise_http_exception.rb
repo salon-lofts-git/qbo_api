@@ -21,8 +21,12 @@ module FaradayMiddleware
           raise QboApi::TooManyRequests.new(error_message(response))
         when 500
           raise QboApi::InternalServerError.new(error_message(response))
+        when 502
+          raise QboApi::BadGateway.new({ error_body: response.reason_phrase })
         when 503
           raise QboApi::ServiceUnavailable.new(error_message(response))
+        when 504
+          raise QboApi::GatewayTimeout.new(error_message(response))
         end
       end
     end
@@ -38,7 +42,8 @@ module FaradayMiddleware
         method: response.method,
         url: response.url,
         status: response.status,
-        error_body: error_body(response.body)
+        error_body: error_body(response.body),
+        intuit_tid: response[:response_headers]['intuit_tid']
       }
     end
 
@@ -52,13 +57,14 @@ module FaradayMiddleware
 
     def parse_json(body)
       res = ::JSON.parse(body)
-      r = res['Fault']['Error']
-      r.collect do |e|
+      fault = res['Fault'] || res['fault']
+      errors = fault['Error'] || fault['error']
+      errors.collect do |error|
         {
-          fault_type: e['type'],
-          error_code: e['code'],
-          error_message: e['Message'],
-          error_detail: e['Detail']
+          fault_type: fault['type'],
+          error_code: error['code'],
+          error_message: error['Message'] || error['message'],
+          error_detail: error['Detail'] || error['detail']
         }
       end
     end
