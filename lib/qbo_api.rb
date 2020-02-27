@@ -24,6 +24,7 @@ class QboApi
 
   attr_accessor :realm_id
   attr_accessor :endpoint
+  attr_accessor :retry_proc
 
   V3_ENDPOINT_BASE_URL       = 'https://sandbox-quickbooks.api.intuit.com/v3/company/'
   PAYMENTS_API_BASE_URL      = 'https://sandbox.api.intuit.com/quickbooks/v4/payments'
@@ -46,7 +47,7 @@ class QboApi
   end
 
   def connection(url: endpoint_url)
-    @connection ||= authorized_json_connection(url)
+    @connection ||= authorized_json_connection(url, retry_proc: retry_proc)
   end
 
   def endpoint_url

@@ -10,7 +10,7 @@ class QboApi
       Connection::AUTHORIZATION_MIDDLEWARES << strategy_name
     end
 
-    def authorized_json_connection(url, headers: nil)
+    def authorized_json_connection(url, headers: nil, retry_proc: nil)
       headers ||= {}
       headers['Accept'] ||= 'application/json' # required "we'll only accept JSON". Can be changed to any `+json` media type.
       headers['Content-Type'] ||= 'application/json;charset=UTF-8' # required when request has a body, else harmless
@@ -18,11 +18,13 @@ class QboApi
         add_authorization_middleware(conn)
         add_exception_middleware(conn)
         conn.request :url_encoded
+        add_retry_authorization(conn, retry_proc: retry_proc)
+        add_logging_middleware(conn)
         add_connection_adapter(conn)
       end
     end
 
-    def authorized_multipart_connection(url)
+    def authorized_multipart_connection(url, retry_proc: nil)
       headers = {
         'Content-Type' => 'multipart/form-data',
         'Accept' => 'application/json'
@@ -31,6 +33,8 @@ class QboApi
         add_authorization_middleware(conn)
         add_exception_middleware(conn)
         conn.request :multipart
+        add_retry_authorization(conn, retry_proc: retry_proc)
+        add_logging_middleware(conn)
         add_connection_adapter(conn)
       end
     end
@@ -48,7 +52,6 @@ class QboApi
     #   }
     def build_connection(url, headers: nil)
       Faraday.new(url: url) { |conn|
-        conn.response :detailed_logger, QboApi.logger, LOG_TAG if QboApi.log
         conn.headers.update(headers) if headers
         yield conn if block_given?
       }
@@ -61,6 +64,8 @@ class QboApi
 
     def raw_request(method, conn:, path:, payload: nil, params: nil)
       path = finalize_path(path, method: method, params: params)
+      guard_with_idempotency_sanity_check(method, path)
+
       conn.public_send(method) do |req|
         case method
         when :get, :delete
@@ -126,6 +131,24 @@ class QboApi
         public_send("add_#{strategy_name}_authorization_middleware", conn)
         true
       end
+    end
+
+    def add_retry_authorization(conn, retry_proc: nil)
+      return unless retry_proc
+
+      # Pass empty array to methods: so that we can get a new auth token for GET's if we get a 401,
+      # Without the empty array we would only hit retry_if on PUT/POST/PATCH
+      conn.request :retry, max: 5, methods: [], retry_statuses: [401], retry_if: retry_proc
+    end
+
+    def add_logging_middleware(conn)
+      conn.response :detailed_logger, QboApi.logger, LOG_TAG if QboApi.log
+    end
+
+    def guard_with_idempotency_sanity_check(method, path)
+      return if method == :get
+      return if path.include?('requestid')
+      raise QboApi::Error.new error_body: "you must include a unique reqestid in the params for the :#{method} method"
     end
 
     def entity_name(entity)
